@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "screen-agent": {
+      "description": "桌面 GUI 视觉代理 — 看懂并操作任何 Windows 软件",
+      "command": "node",
+      "args": ["D:/path/to/screen-agent/dist/index.js"],
+      "env": {
+        "SCREEN_AGENT_PYTHON": "python",
+        "SCREEN_AGENT_LOG_LEVEL": "info",
+        "SCREEN_AGENT_TIMEOUT": "15000",
+        "SCREEN_AGENT_CACHE": "true"
+      }
+    }
+  }
+}
