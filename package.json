@@ -5,11 +5,12 @@
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "screen-agent": "./dist/index.js",
-    "screen-agent-configure": "./scripts/configure.mjs"
+    "screen-agent": "bin/screen-agent.js",
+    "screen-agent-configure": "bin/screen-agent-configure.js"
   },
   "files": [
     "dist",
+    "bin",
     "scripts",
     "vision",
     "requirements.txt",
