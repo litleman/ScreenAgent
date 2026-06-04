@@ -1,10 +1,26 @@
 {
   "name": "screen-agent",
   "version": "0.1.0",
-  "description": "Universal desktop GUI vision-agent MCP server — see, understand, and operate any software",
+  "description": "桌面 GUI 视觉代理引擎 — 让 AI 看懂并操作任何 Windows 软件",
   "type": "module",
   "main": "dist/index.js",
+  "bin": {
+    "screen-agent": "./dist/index.js",
+    "screen-agent-configure": "./scripts/configure.mjs"
+  },
+  "files": [
+    "dist",
+    "scripts",
+    "vision",
+    "requirements.txt",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
+    "postinstall": "pip install -r requirements.txt 2>nul & node scripts/configure.mjs --install",
+    "prepare": "pip install -r requirements.txt 2>nul || echo 跳过 Python 依赖安装",
+    "setup": "pip install -r requirements.txt && python scripts/check.py && node scripts/configure.mjs --all",
+    "configure": "node scripts/configure.mjs",
     "build": "tsc",
     "watch": "tsc --watch",
     "start": "node dist/index.js",
@@ -13,10 +29,31 @@
     "test:watch": "vitest",
     "lint": "eslint src/ --ext .ts",
     "typecheck": "tsc --noEmit",
-    "check": "npm run typecheck && npm test && python scripts/check.py",
+    "check": "npm run typecheck && npm test && npm run setup",
     "clean": "rm -rf dist",
-    "prebuild": "npm run clean"
+    "prebuild": "npm run clean",
+    "prepublishOnly": "npm run build"
   },
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/litleman/ScreenAgent.git"
+  },
+  "keywords": [
+    "mcp",
+    "screen-agent",
+    "gui-agent",
+    "desktop-automation",
+    "computer-use",
+    "vision",
+    "uia",
+    "ocr",
+    "windows"
+  ],
+  "author": "litleman",
+  "license": "MIT",
   "dependencies": {
     "@harusame64/desktop-touch-mcp": "^1.9.2",
     "@modelcontextprotocol/sdk": "^1.9.0",

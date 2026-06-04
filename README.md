@@ -50,38 +50,35 @@
 
 | 环境 | 版本要求 |
 |------|---------|
-| Node.js | >= 18 |
-| Python | >= 3.9 |
+| Node.js | >= 18+ |
+| Python | >= 3.9+ |
 | 操作系统 | Windows 10/11 (必需，依赖 Win32 API + UIA) |
 
 ### 一键安装
 
-```
-scripts\setup.bat
-```
-
-### 手动安装
-
 ```bash
-# 1. Python 依赖（必需）
-pip install pywinauto>=6.8.0 Pillow>=10.0.0 numpy>=1.24.0 opencv-python>=4.8.0 easyocr>=1.7.0
-
-# 2. Python 可选（自动降级后端）
-pip install pyautogui>=0.9.53
-
-# 3. Node.js 依赖
-npm install
-
-# 4. 编译 TypeScript
-npm run build
-
-# 5. 健康检查
-python scripts/check.py
+npm install -g screen-agent
 ```
+
+安装时自动：
+1. 安装 Node.js 依赖
+2. 安装 Python 依赖（`pip install -r requirements.txt`）
+3. 交互选择 AI 客户端 → **自动写入配置文件**
+
+> 非交互环境（CI/Docker）安装完成后手动运行 `screen-agent-configure` 即可配置。
+
+### 其他命令
+
+| 命令 | 功能 |
+|------|------|
+| `screen-agent` | 启动 MCP 服务器 |
+| `screen-agent-configure` | 重新配置 MCP 客户端 |
+| `npm run setup` | 手动安装 Python 依赖 + 健康检查 |
+| `npm run check` | 完整检查（类型检查 + 测试 + 环境） |
 
 ### 首次启动 easyocr
 
-easyocr 首次运行时会自动下载中英文识别模型（约 100MB），请确保网络畅通。
+安装时 easyocr 会自动下载中英文识别模型（约 100MB），请确保网络畅通。
 
 ## 配置
 
@@ -98,30 +95,7 @@ SCREEN_AGENT_SCREENSHOT_DIR=./screenshots
 
 ## MCP 客户端配置
 
-### Claude Desktop
-
-编辑 `claude_desktop_config.json`（位于 `%APPDATA%\Claude\`）：
-
-```json
-{
-  "mcpServers": {
-    "screen-agent": {
-      "description": "桌面 GUI 视觉代理 — 看懂并操作任何 Windows 软件",
-      "command": "node",
-      "args": ["D:/path/to/screen-agent/dist/index.js"],
-      "env": {
-        "SCREEN_AGENT_PYTHON": "python",
-        "SCREEN_AGENT_LOG_LEVEL": "info",
-        "SCREEN_AGENT_TIMEOUT": "15000",
-        "SCREEN_AGENT_CACHE": "true"
-      }
-    }
-  }
-}
-```
-
-> `args` 中的路径请替换为你的实际项目路径。
-> 如果 Python 不在 PATH 中，将 `SCREEN_AGENT_PYTHON` 改为完整路径如 `C:/Users/xxx/.pyenv/pyenv-win/versions/3.12.0/python.exe`。
+运行 `screen-agent-configure`（或 `npm run configure`），交互选择客户端 → 自动写入配置。
 
 ### Cursor / 其他 MCP 客户端
 
@@ -165,11 +139,14 @@ SCREEN_AGENT_SCREENSHOT_DIR=./screenshots
 ### 命令
 
 ```bash
-npm run dev          # 开发模式（tsx 热加载）
-npm run build        # 编译到 dist/
+npm run setup        # 安装 Python 依赖 + 健康检查（首次安装后运行）
+npm run build        # 编译 TypeScript 到 dist/
+npm run dev          # 开发模式（tsx 热加载，无需编译）
+npm start            # 生产模式启动
+npm run configure    # 生成 Claude Desktop 配置
+npm run check        # 完整检查（类型检查 + 测试 + 环境）
 npm test             # 运行测试 (vitest)
 npm run typecheck    # TypeScript 类型检查
-npm run check        # 完整检查（类型检查 + 测试 + 环境）
 ```
 
 ### 目录结构

@@ -17,17 +17,16 @@
 - 可选: pyautogui
 - `pip install -r requirements.txt`
 
-## MCP 配置（Claude Desktop）
-`claude_desktop_config.json`:
+## MCP 配置
+安装后运行 `npm run configure`，交互选择客户端（Claude Desktop / OpenCode / Cursor / Windsurf），自动生成对应配置。
+
 ```json
 {
   "mcpServers": {
     "screen-agent": {
       "command": "node",
       "args": ["D:/path/to/screen-agent/dist/index.js"],
-      "env": {
-        "SCREEN_AGENT_PYTHON": "python"
-      }
+      "env": { "SCREEN_AGENT_PYTHON": "python" }
     }
   }
 }
