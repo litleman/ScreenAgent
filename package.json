@@ -1,6 +1,6 @@
 {
   "name": "screen-agent",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "桌面 GUI 视觉代理引擎 — 让 AI 看懂并操作任何 Windows 软件",
   "type": "module",
   "main": "dist/index.js",
