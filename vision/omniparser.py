@@ -62,16 +62,22 @@ class ScreenElement:
     confidence: float = 0.0
 
 _ocr_reader = None
+_ocr_init_attempted = False
 
 def get_ocr():
-    global _ocr_reader
-    if _ocr_reader is None:
+    global _ocr_reader, _ocr_init_attempted
+    if _ocr_reader is None and not _ocr_init_attempted:
+        _ocr_init_attempted = True
         try:
             import easyocr
+            print("[INFO] easyocr 正在下载/加载识别模型 (~100MB)，首次运行可能需要几分钟...", file=sys.stderr)
             _ocr_reader = easyocr.Reader(['ch_sim', 'en'], gpu=False)
+            print("[INFO] easyocr 模型就绪", file=sys.stderr)
         except ImportError:
             print("[WARN] easyocr not installed. Run: pip install easyocr", file=sys.stderr)
-            _ocr_reader = None
+        except Exception as e:
+            print(f"[WARN] easyocr 初始化失败: {e}", file=sys.stderr)
+            print("[WARN] OCR 功能不可用，将仅使用 UIA 模式运行", file=sys.stderr)
     return _ocr_reader
 
 def take_screenshot():

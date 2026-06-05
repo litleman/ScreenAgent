@@ -1,5 +1,7 @@
 import { execSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
+import path from 'node:path'
 
 export interface ScreenAgentConfig {
   pythonPath: string
@@ -46,6 +48,19 @@ function loadConfig(): ScreenAgentConfig {
 }
 
 export const config = loadConfig()
+
+function loadVersion(): string {
+  try {
+    const dir = fileURLToPath(new URL('.', import.meta.url))
+    const pkgPath = path.resolve(dir, '..', '..', 'package.json')
+    const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'))
+    return pkg.version ?? '0.0.0'
+  } catch {
+    return '0.0.0'
+  }
+}
+
+export const APP_VERSION = loadVersion()
 
 const PYTHON_NOT_FOUND_MSG = `未检测到 Python 或 Python 依赖未安装
 

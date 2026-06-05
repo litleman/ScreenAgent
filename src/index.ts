@@ -4,7 +4,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
 import { logger } from './utils/logger.js'
-import { config } from './utils/config.js'
+import { config, APP_VERSION } from './utils/config.js'
 
 import { discoverSchema, discoverHandler } from './tools/discover.js'
 import { actSchema, actHandler } from './tools/act.js'
@@ -18,7 +18,7 @@ import {
 
 const server = new McpServer({
   name: 'screen-agent',
-  version: '0.1.0',
+  version: APP_VERSION,
   description: 'Universal desktop GUI vision-agent — see, understand, and operate any software on Windows',
 })
 

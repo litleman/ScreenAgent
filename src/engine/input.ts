@@ -126,13 +126,6 @@ export function executeInput(action: InputAction): InputResult {
     }
   }
 
-  if (act === 'type' && !action.text) {
-    return { success: false, action: act, error: 'type 操作需要 text 参数' }
-  }
-  if (act === 'keyPress' && !action.key) {
-    return { success: false, action: act, error: 'keyPress 操作需要 key 参数' }
-  }
-
   try {
     const inputJson = buildInputPayload(action)
     const stdout = execSync(

@@ -81,7 +81,10 @@ const clients = [
     id: 'cursor',
     name: 'Cursor',
     desc: 'AI 代码编辑器',
-    configFile: () => path.join(projectRoot, '.cursor', 'mcp.json'),
+    configFile: () => {
+      const userProfile = process.env.USERPROFILE
+      return userProfile ? path.join(userProfile, '.cursor', 'mcp.json') : null
+    },
     writeConfig: (cfgPath) => {
       let existing = {}
       try {
@@ -101,7 +104,10 @@ const clients = [
     id: 'windsurf',
     name: 'Windsurf',
     desc: 'AI IDE',
-    configFile: () => path.join(projectRoot, '.codeium', 'mcp_config.json'),
+    configFile: () => {
+      const userProfile = process.env.USERPROFILE
+      return userProfile ? path.join(userProfile, '.codeium', 'mcp_config.json') : null
+    },
     writeConfig: (cfgPath) => {
       let existing = {}
       try {
