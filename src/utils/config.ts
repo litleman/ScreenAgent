@@ -1,3 +1,4 @@
+import { execSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 export interface ScreenAgentConfig {
@@ -45,3 +46,26 @@ function loadConfig(): ScreenAgentConfig {
 }
 
 export const config = loadConfig()
+
+const PYTHON_NOT_FOUND_MSG = `未检测到 Python 或 Python 依赖未安装
+
+请确保:
+  1. 已安装 Python 3.9+ (https://python.org)
+  2. Python 已添加到系统 PATH
+  3. 已安装依赖: pip install -r requirements.txt
+
+安装完成后再重新启动 Screen Agent`
+
+export function checkPythonAvailable(): { ok: true } | { ok: false; error: string } {
+  try {
+    const stdout = execSync('python --version', { encoding: 'utf-8', timeout: 5000 })
+    return { ok: true }
+  } catch {
+    try {
+      execSync('python3 --version', { encoding: 'utf-8', timeout: 5000 })
+      return { ok: true }
+    } catch {
+      return { ok: false, error: PYTHON_NOT_FOUND_MSG }
+    }
+  }
+}

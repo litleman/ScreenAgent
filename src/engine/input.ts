@@ -1,5 +1,5 @@
 import { execSync } from 'node:child_process'
-import { config } from '../utils/config.js'
+import { config, checkPythonAvailable } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
 import type { Bounds, MovementProfile, ClickVerificationResult } from '../utils/types.js'
 import { DEFAULT_MOVEMENT_PROFILE } from '../utils/types.js'
@@ -50,6 +50,13 @@ export function resetInputStats(): void {
 
 export function executeInput(action: InputAction): InputResult {
   inputStats.totalCalls++
+
+  const pyCheck = checkPythonAvailable()
+  if (!pyCheck.ok) {
+    inputStats.totalFailures++
+    return { success: false, action: action.action, error: pyCheck.error }
+  }
+
   const act = action.action
 
   if (act === 'type' && !action.text) {

@@ -1,6 +1,6 @@
 import { execSync } from 'node:child_process'
 import { mkdirSync } from 'node:fs'
-import { config } from '../utils/config.js'
+import { config, checkPythonAvailable } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
 import { getCache, setCache } from '../utils/cache.js'
 import type { VisionSidecarResult, WindowInfo } from '../utils/types.js'
@@ -12,6 +12,10 @@ export function runVisionSidecar(force = false): VisionSidecarResult {
   }
 
   const start = performance.now()
+  const pyCheck = checkPythonAvailable()
+  if (!pyCheck.ok) {
+    return { success: false, elements: [], screenshotPath: null, error: pyCheck.error, duration: 0 }
+  }
   try {
     mkdirSync(config.screenshotDir, { recursive: true })
     const flag = force ? '--force' : ''

@@ -18,8 +18,8 @@
     "LICENSE"
   ],
   "scripts": {
-    "postinstall": "pip install -r requirements.txt 2>nul & node scripts/configure.mjs --install",
-    "prepare": "pip install -r requirements.txt 2>nul || echo 跳过 Python 依赖安装",
+    "postinstall": "node scripts/postinstall.mjs",
+    "prepare": "pip install -r \"%~dp0requirements.txt\" 2>nul || echo 跳过 Python 依赖安装",
     "setup": "pip install -r requirements.txt && python scripts/check.py && node scripts/configure.mjs --all",
     "configure": "node scripts/configure.mjs",
     "build": "tsc",

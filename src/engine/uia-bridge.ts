@@ -1,5 +1,5 @@
 import { execSync } from 'node:child_process'
-import { config } from '../utils/config.js'
+import { config, checkPythonAvailable } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
 import { getCache, setCache } from '../utils/cache.js'
 import type { ScreenElement, UiaResult, WindowInfo, Bounds } from '../utils/types.js'
@@ -11,6 +11,10 @@ export function scanUiaTree(force = false): UiaResult {
   }
 
   try {
+    const pyCheck = checkPythonAvailable()
+    if (!pyCheck.ok) {
+      return { success: false, elements: [], focusedApp: null, focusedWindow: null, windowBounds: null, error: pyCheck.error }
+    }
     const stdout = execSync(
       `"${config.pythonPath}" "${config.uiaScriptPath}"`,
       { encoding: 'utf-8', timeout: config.defaultTimeout },
