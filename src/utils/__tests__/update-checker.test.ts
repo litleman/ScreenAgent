@@ -16,7 +16,7 @@ import { logger } from '../logger.js'
 vi.mock('child_process')
 vi.mock('fs')
 vi.mock('https')
-vi.mock('../config.js', () => ({ APP_VERSION: '0.1.3' }))
+vi.mock('../config.js', () => ({ APP_VERSION: '0.2.0' }))
 
 describe('isCacheValid', () => {
   it('null 缓存返回 false', () => {
@@ -210,7 +210,7 @@ describe('checkForUpdate', () => {
     const mockReq = { on: vi.fn(), destroy: vi.fn() }
     const mockRes = {
       on: vi.fn((event: string, cb: Function) => {
-        if (event === 'data') cb('{"version":"0.1.3"}')
+        if (event === 'data') cb('{"version":"0.2.0"}')
         if (event === 'end') cb()
         return mockRes
       }),
