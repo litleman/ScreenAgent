@@ -1,5 +1,5 @@
 import type { ScreenElement, WindowInfo, Bounds, ClickValidation, RiskLevel } from '../utils/types.js'
-import { isClickWithinBounds } from './perception.js'
+import { isClickWithinBounds } from '../engine/window.js'
 import { logger } from '../utils/logger.js'
 
 const ELEMENT_TYPE_SAFE_MARGINS: Record<string, number> = {
@@ -89,14 +89,6 @@ export function validateClick(
     }
   }
 
-  const overlappingWarnings = checkOverlappingElements(
-    targetX, targetY, element, windows,
-  )
-  warnings.push(...overlappingWarnings)
-  if (overlappingWarnings.length > 0) {
-    riskLevel = escalateRisk(riskLevel, 'medium')
-  }
-
   return {
     safe: riskLevel !== 'high',
     riskLevel,
@@ -149,20 +141,6 @@ function checkWindowEdgeProximity(
   if (distRight < WINDOW_FRAME_SAFE_ZONE && distRight >= 0) {
     warnings.push(`点击靠近窗口右边缘 (${distRight.toFixed(0)}px)，有误触窗口边框风险`)
   }
-
-  return warnings
-}
-
-function checkOverlappingElements(
-  x: number, y: number, target: ScreenElement, windows: WindowInfo[],
-): string[] {
-  const warnings: string[] = []
-  if (!windows.length) return warnings
-
-  const windowIds = new Set(windows.map(w => w.id))
-  const siblings = target.windowId
-    ? [{ x: 0, y: 0, width: 0, height: 0 }]
-    : []
 
   return warnings
 }

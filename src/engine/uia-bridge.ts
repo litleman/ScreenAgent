@@ -3,7 +3,8 @@ import { config, checkPythonAvailable } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
 import { getCache, setCache, clearCache } from '../utils/cache.js'
 import { screenContext } from './context.js'
-import type { ScreenElement, UiaResult, WindowInfo, DialogInfo, MenuItemInfo, Bounds } from '../utils/types.js'
+import type { ScreenElement, UiaResult, DialogInfo, MenuItemInfo, Bounds } from '../utils/types.js'
+import { parseWindows } from '../utils/windows.js'
 
 /** 从新旧多种格式中提取 focus.app */
 function parseFocusApp(parsed: Record<string, unknown>): string | null {
@@ -36,13 +37,10 @@ function parseWindowBounds(parsed: Record<string, unknown>): Bounds | null {
 
 export function scanUiaTree(force = false): UiaResult {
   if (!force) {
-    if (screenContext.hadFocusChangeSinceLastScan()) {
+    const evict = screenContext.hadFocusChangeSinceLastScan() || screenContext.hadMenuTransitionSinceLastScan()
+    if (evict) {
       clearCache('uia:.*')
-      logger.info('Focus changed, UIA cache cleared')
-    }
-    if (screenContext.hadMenuTransitionSinceLastScan()) {
-      clearCache('uia:.*')
-      logger.info('Menu transition detected, UIA cache cleared')
+      logger.info('Focus or menu transition, UIA cache cleared')
     }
     const cached = getCache<UiaResult>('uia:tree')
     if (cached) return cached
@@ -106,30 +104,6 @@ export function scanUiaTree(force = false): UiaResult {
       error: String(err),
     }
   }
-}
-
-function parseWindows(raw: unknown): WindowInfo[] | undefined {
-  if (!Array.isArray(raw)) return undefined
-  return raw.map((w: Record<string, unknown>) => {
-    const b = w.bounds as Record<string, unknown> | undefined
-    return {
-      id: String(w.id ?? ''),
-      title: String(w.title ?? ''),
-      processName: String(w.processName ?? w.process_name ?? ''),
-      bounds: {
-        x: Number(b?.x ?? w.x ?? 0),
-        y: Number(b?.y ?? w.y ?? 0),
-        width: Number(b?.width ?? w.width ?? 0),
-        height: Number(b?.height ?? w.height ?? 0),
-      },
-      isMinimized: Boolean(w.isMinimized ?? w.is_minimized ?? false),
-      isMaximized: Boolean(w.isMaximized ?? w.is_maximized ?? false),
-      isFocused: Boolean(w.isFocused ?? w.is_focused ?? false),
-      isDialog: w.isDialog != null ? Boolean(w.isDialog) : undefined,
-      blockedBy: w.blockedBy != null ? String(w.blockedBy) : undefined,
-      zOrder: Number(w.zOrder ?? w.z_order ?? 0),
-    }
-  })
 }
 
 function parseMenuItems(raw: unknown): MenuItemInfo[] | undefined {

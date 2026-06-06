@@ -6,6 +6,7 @@ import { fuseElements } from '../engine/fusion.js'
 import { logger } from '../utils/logger.js'
 import { success, error } from '../utils/response.js'
 import type { ToolHandler, WindowInfo } from '../utils/types.js'
+import { mergeWindows } from '../utils/windows.js'
 
 export const visionSchema = {
   force: z.boolean().default(false).describe('强制重新扫描（跳过缓存）'),
@@ -37,7 +38,7 @@ export const visionHandler: ToolHandler = async (args) => {
 
   const uiaElements = uia.success ? uia.elements : []
   const ocrElements = vision.elements
-  const allWindows: WindowInfo[] = mergeWindowSources(vision.windows, uia.windows)
+  const allWindows: WindowInfo[] = mergeWindows(vision.windows, uia.windows)
 
   const { elements, stats } = fuseElements(uiaElements, ocrElements, allWindows)
   logger.info(`Fusion: ${stats.fused} merged, ${stats.uiaOnly} UIA-only, ${stats.ocrOnly} OCR-only (${stats.totalBefore}→${stats.totalAfter})`)
@@ -106,11 +107,4 @@ export const visionHandler: ToolHandler = async (args) => {
   return success(response)
 }
 
-function mergeWindowSources(a?: WindowInfo[], b?: WindowInfo[]): WindowInfo[] {
-  const map = new Map<string, WindowInfo>()
-  for (const w of a ?? []) map.set(w.id, w)
-  for (const w of b ?? []) {
-    if (!map.has(w.id)) map.set(w.id, w)
-  }
-  return Array.from(map.values())
-}
+

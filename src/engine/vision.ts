@@ -3,7 +3,8 @@ import { mkdirSync } from 'node:fs'
 import { config, checkPythonAvailable } from '../utils/config.js'
 import { logger } from '../utils/logger.js'
 import { getCache, setCache } from '../utils/cache.js'
-import type { VisionSidecarResult, WindowInfo } from '../utils/types.js'
+import type { VisionSidecarResult } from '../utils/types.js'
+import { parseWindows } from '../utils/windows.js'
 
 export function runVisionSidecar(force = false): VisionSidecarResult {
   if (!force) {
@@ -48,24 +49,4 @@ export function runVisionSidecar(force = false): VisionSidecarResult {
   }
 }
 
-function parseWindows(raw: unknown): WindowInfo[] | undefined {
-  if (!Array.isArray(raw)) return undefined
-  return raw.map((w: Record<string, unknown>) => {
-    const b = w.bounds as Record<string, unknown> | undefined
-    return {
-      id: String(w.id ?? ''),
-      title: String(w.title ?? ''),
-      processName: String(w.processName ?? w.process_name ?? ''),
-      bounds: {
-        x: Number(b?.x ?? w.x ?? 0),
-        y: Number(b?.y ?? w.y ?? 0),
-        width: Number(b?.width ?? w.width ?? 0),
-        height: Number(b?.height ?? w.height ?? 0),
-      },
-      isMinimized: Boolean(w.isMinimized ?? w.is_minimized ?? false),
-      isMaximized: Boolean(w.isMaximized ?? w.is_maximized ?? false),
-      isFocused: Boolean(w.isFocused ?? w.is_focused ?? false),
-      zOrder: Number(w.zOrder ?? w.z_order ?? 0),
-    }
-  })
-}
+

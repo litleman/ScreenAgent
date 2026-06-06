@@ -4,3 +4,5 @@ dist/
 *.log
 vision/__pycache__/
 vision/.venv/
+
+screenshots/

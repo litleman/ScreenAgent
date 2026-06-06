@@ -77,74 +77,45 @@ export function executeInput(action: InputAction): InputResult {
     const x = posResult.x!
     const y = posResult.y!
 
-    try {
-      const inputJson = buildInputPayload(action, x, y)
-      const stdout = execSync(
-        `"${config.pythonPath}" "${config.inputScriptPath}" ${encodeURIComponent(inputJson)}`,
-        { encoding: 'utf-8', timeout: config.defaultTimeout },
-      )
-      const pythonResult = JSON.parse(stdout)
-      const backend = pythonResult.backend ?? 'unknown'
-      inputStats.lastBackend = backend
-      logger.debug(`Input ${act}: backend=${backend} success=${pythonResult.success} at (${x}, ${y})`)
+    const pr = callSidecar(buildInputPayload(action, x, y), act)
+    if (!pr) return { success: false, action: act, error: 'Sidecar call failed' }
 
-      const result: InputResult = {
-        success: pythonResult.success ?? true,
-        action: act,
-        x, y,
-        withinSafeBounds: posResult.withinSafeBounds,
-        adjusted: posResult.adjusted,
-        backend,
-      }
-
-      if (pythonResult.verification) {
-        result.verification = {
-          verified: pythonResult.verification.verified ?? false,
-          method: pythonResult.verification.method ?? 'none',
-          confidence: pythonResult.verification.confidence ?? 0,
-          details: pythonResult.verification.details ?? [],
-        }
-      }
-
-      if (pythonResult.calibrated) {
-        result.calibrated = {
-          raw: pythonResult.calibrated.raw ?? { x, y },
-          calibrated: pythonResult.calibrated.calibrated ?? { x, y },
-          dpiScale: pythonResult.calibrated.dpi_scale ?? 1,
-          monitorIndex: pythonResult.calibrated.monitor_index ?? 0,
-        }
-      }
-
-      if (!result.success) {
-        inputStats.totalFailures++
-      }
-      return result
-    } catch (err) {
-      inputStats.totalFailures++
-      logger.error(`Input ${act} failed`, err)
-      return { success: false, action: act, error: String(err) }
+    if (!pr.pythonResult.success) inputStats.totalFailures++
+    const result: InputResult = {
+      success: pr.pythonResult.success ?? true,
+      action: act, x, y,
+      withinSafeBounds: posResult.withinSafeBounds,
+      adjusted: posResult.adjusted,
+      backend: pr.backend,
     }
+
+    const v = pr.pythonResult.verification
+    if (v) {
+      result.verification = {
+        verified: v.verified ?? false,
+        method: v.method ?? 'none',
+        confidence: v.confidence ?? 0,
+        details: v.details ?? [],
+      }
+    }
+
+    const c = pr.pythonResult.calibrated
+    if (c) {
+      result.calibrated = {
+        raw: c.raw ?? { x, y },
+        calibrated: c.calibrated ?? { x, y },
+        dpiScale: c.dpi_scale ?? 1,
+        monitorIndex: c.monitor_index ?? 0,
+      }
+    }
+    return result
   }
 
-  try {
-    const inputJson = buildInputPayload(action)
-    const stdout = execSync(
-      `"${config.pythonPath}" "${config.inputScriptPath}" ${encodeURIComponent(inputJson)}`,
-      { encoding: 'utf-8', timeout: config.defaultTimeout },
-    )
-    const pythonResult = JSON.parse(stdout)
-    const backend = pythonResult.backend ?? 'unknown'
-    inputStats.lastBackend = backend
-    logger.debug(`Input ${act}: backend=${backend} success=${pythonResult.success}`)
-    if (!pythonResult.success) {
-      inputStats.totalFailures++
-    }
-    return { success: pythonResult.success, action: act, backend }
-  } catch (err) {
-    inputStats.totalFailures++
-    logger.error(`Input ${act} failed`, err)
-    return { success: false, action: act, error: String(err) }
-  }
+  const pr = callSidecar(buildInputPayload(action), act)
+  if (!pr) return { success: false, action: act, error: 'Sidecar call failed' }
+
+  if (!pr.pythonResult.success) inputStats.totalFailures++
+  return { success: pr.pythonResult.success, action: act, backend: pr.backend }
 }
 
 function buildInputPayload(action: InputAction, x?: number, y?: number): string {
@@ -174,6 +145,26 @@ function buildInputPayload(action: InputAction, x?: number, y?: number): string 
   }
 
   return JSON.stringify(payload)
+}
+
+function callSidecar(
+  inputJson: string, act: string,
+): { pythonResult: Record<string, any>; backend: string } | null {
+  try {
+    const stdout = execSync(
+      `"${config.pythonPath}" "${config.inputScriptPath}" ${encodeURIComponent(inputJson)}`,
+      { encoding: 'utf-8', timeout: config.defaultTimeout },
+    )
+    const pythonResult = JSON.parse(stdout)
+    const backend = pythonResult.backend ?? 'unknown'
+    inputStats.lastBackend = backend
+    logger.debug(`Input ${act}: backend=${backend} success=${pythonResult.success}`)
+    return { pythonResult, backend }
+  } catch (err) {
+    inputStats.totalFailures++
+    logger.error(`Input ${act} failed`, err)
+    return null
+  }
 }
 
 export function validatePosition(action: InputAction): {

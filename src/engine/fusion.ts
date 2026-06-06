@@ -1,5 +1,7 @@
 import type { ScreenElement, WindowInfo } from '../utils/types.js'
 import { logger } from '../utils/logger.js'
+import { levenshteinSimilarity as sharedLevenshtein } from '../utils/levenshtein.js'
+import { computeIoU } from './window.js'
 
 const FUSION_THRESHOLD = 0.6
 const TEXT_MATCH_IOU_FLOOR = 0.05
@@ -102,10 +104,7 @@ export function fuseElements(
 }
 
 function multiFactorSimilarity(ocr: ScreenElement, uia: ScreenElement): number {
-  const iouScore = computeIoU(
-    ocr.bounds.x, ocr.bounds.y, ocr.bounds.width, ocr.bounds.height,
-    uia.bounds.x, uia.bounds.y, uia.bounds.width, uia.bounds.height,
-  )
+  const iouScore = computeIoU(ocr.bounds, uia.bounds)
   if (iouScore <= 0) return 0
 
   const textScore = levenshteinSimilarity(ocr.label, uia.label)
@@ -134,25 +133,7 @@ function levenshteinSimilarity(a: string, b: string): number {
   if (al === bl) return 1
   if (!al || !bl) return 0
   if (al.includes(bl) || bl.includes(al)) return 0.8 + Math.min(al.length, bl.length) / Math.max(al.length, bl.length) * 0.2
-
-  const n = al.length
-  const m = bl.length
-  const maxLen = Math.max(n, m)
-  if (maxLen === 0) return 1
-
-  const dp: number[][] = Array.from({ length: n + 1 }, () => Array(m + 1).fill(0))
-  for (let i = 0; i <= n; i++) dp[i][0] = i
-  for (let j = 0; j <= m; j++) dp[0][j] = j
-  for (let i = 1; i <= n; i++) {
-    for (let j = 1; j <= m; j++) {
-      dp[i][j] = Math.min(
-        dp[i - 1][j] + 1,
-        dp[i][j - 1] + 1,
-        dp[i - 1][j - 1] + (al[i - 1] === bl[j - 1] ? 0 : 1),
-      )
-    }
-  }
-  return 1 - dp[n][m] / maxLen
+  return sharedLevenshtein(al, bl)
 }
 
 function mergeElements(
@@ -190,17 +171,6 @@ function mergeElements(
   }
 
   return enriched
-}
-
-function computeIoU(
-  ax: number, ay: number, aw: number, ah: number,
-  bx: number, by: number, bw: number, bh: number,
-): number {
-  const xOverlap = Math.max(0, Math.min(ax + aw, bx + bw) - Math.max(ax, bx))
-  const yOverlap = Math.max(0, Math.min(ay + ah, by + bh) - Math.max(ay, by))
-  const intersection = xOverlap * yOverlap
-  const union = aw * ah + bw * bh - intersection
-  return union <= 0 ? 0 : intersection / union
 }
 
 function findClosestWindow(
@@ -243,10 +213,7 @@ function findClosestWindow(
 }
 
 function matchByText(ocr: ScreenElement, uia: ScreenElement): number {
-  const iou = computeIoU(
-    ocr.bounds.x, ocr.bounds.y, ocr.bounds.width, ocr.bounds.height,
-    uia.bounds.x, uia.bounds.y, uia.bounds.width, uia.bounds.height,
-  )
+  const iou = computeIoU(ocr.bounds, uia.bounds)
   if (iou < TEXT_MATCH_IOU_FLOOR) return 0
 
   const lev = levenshteinSimilarity(ocr.label, uia.label)
@@ -265,10 +232,7 @@ function matchByText(ocr: ScreenElement, uia: ScreenElement): number {
 export function dedupeByBounds(elements: ScreenElement[]): ScreenElement[] {
   const kept: ScreenElement[] = []
   for (const el of elements) {
-    const isDuplicate = kept.some(k => computeIoU(
-      el.bounds.x, el.bounds.y, el.bounds.width, el.bounds.height,
-      k.bounds.x, k.bounds.y, k.bounds.width, k.bounds.height,
-    ) > 0.8)
+    const isDuplicate = kept.some(k => computeIoU(el.bounds, k.bounds) > 0.8)
     if (!isDuplicate) kept.push(el)
   }
   return kept

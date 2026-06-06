@@ -141,15 +141,8 @@ export class WindowTracker {
         contained: isContainedIn(elBounds, w.bounds),
         overlap: computeIoU(elBounds, w.bounds),
         centerDist: boundsDistance(
-          { x: 0, y: 0, width: 0, height: 0 },
-          { x: 0, y: 0, width: 0, height: 0 }
-        ),
-      }))
-      .map(item => ({
-        ...item,
-        centerDist: boundsDistance(
           { x: element.center.x, y: element.center.y, width: 0, height: 0 },
-          { x: item.window.bounds.x, y: item.window.bounds.y, width: 0, height: 0 }
+          { x: w.bounds.x, y: w.bounds.y, width: 0, height: 0 }
         ),
       }))
       .sort((a, b) => {
@@ -170,10 +163,6 @@ export class WindowTracker {
       const win = this.findElementWindow(el, windows)
       return win ? { ...el, windowId: win.id } : el
     })
-  }
-
-  getChangesSinceLastScan(): WindowChange[] {
-    return []
   }
 
   reset(): void {
@@ -218,10 +207,6 @@ export function isClickWithinBounds(
     y >= bounds.y - margin &&
     y <= bounds.y + bounds.height + margin
   )
-}
-
-export function computeElementBounds(element: ScreenElement): Bounds {
-  return element.bounds
 }
 
 export { computeIoU, isContainedIn, WindowChangeType }

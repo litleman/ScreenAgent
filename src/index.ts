@@ -5,6 +5,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
 import { logger } from './utils/logger.js'
 import { config, APP_VERSION } from './utils/config.js'
+import { checkForUpdate } from './utils/update-checker.js'
 
 import { discoverSchema, discoverHandler } from './tools/discover.js'
 import { actSchema, actHandler } from './tools/act.js'
@@ -74,6 +75,8 @@ async function main() {
   await server.connect(transport)
 
   logger.info('Screen Agent MCP server running on stdio')
+
+  checkForUpdate()  // 异步检测更新，不阻塞
 }
 
 main().catch((err) => {

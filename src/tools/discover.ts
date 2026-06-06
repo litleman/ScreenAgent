@@ -8,6 +8,7 @@ import { computeStateHash } from '../utils/hash.js'
 import { logger } from '../utils/logger.js'
 import { success } from '../utils/response.js'
 import type { ScreenElement, ToolHandler, WindowInfo } from '../utils/types.js'
+import { mergeWindows } from '../utils/windows.js'
 
 export const discoverSchema = {
   force: z.boolean().default(false).describe('强制重新扫描（跳过缓存）'),
@@ -116,13 +117,4 @@ export const discoverHandler: ToolHandler = async (args) => {
   }, false, compact)
 }
 
-function mergeWindows(
-  existing: WindowInfo[],
-  incoming: WindowInfo[],
-): WindowInfo[] {
-  const map = new Map(existing.map(w => [w.id, w]))
-  for (const w of incoming) {
-    if (!map.has(w.id)) map.set(w.id, w)
-  }
-  return Array.from(map.values())
-}
+

@@ -1,6 +1,7 @@
 import type { ScreenState, ScreenElement, WindowInfo, Bounds } from '../utils/types.js'
 import { logger } from '../utils/logger.js'
 import { WindowTracker, type WindowChange } from './window.js'
+import { levenshteinSimilarity as sharedLevenshtein } from '../utils/levenshtein.js'
 
 export class ScreenContext {
   private currentState: ScreenState | null = null
@@ -227,24 +228,7 @@ function labelSimilarity(a: string, b: string): number {
   if (al === bl) return 1
   if (al.includes(bl) || bl.includes(al)) return 0.85
 
-  const maxLen = Math.max(al.length, bl.length)
-  if (maxLen === 0) return 1
-
-  const dp: number[][] = Array.from({ length: al.length + 1 }, () =>
-    Array(bl.length + 1).fill(0)
-  )
-  for (let i = 0; i <= al.length; i++) dp[i][0] = i
-  for (let j = 0; j <= bl.length; j++) dp[0][j] = j
-  for (let i = 1; i <= al.length; i++) {
-    for (let j = 1; j <= bl.length; j++) {
-      dp[i][j] = Math.min(
-        dp[i - 1][j] + 1,
-        dp[i][j - 1] + 1,
-        dp[i - 1][j - 1] + (al[i - 1] === bl[j - 1] ? 0 : 1),
-      )
-    }
-  }
-  return 1 - dp[al.length][bl.length] / maxLen
+  return sharedLevenshtein(al, bl)
 }
 
 export const screenContext = new ScreenContext()

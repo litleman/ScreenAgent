@@ -1,4 +1,6 @@
 import type { ScreenElement, Bounds, ClickValidation, RiskLevel } from '../utils/types.js'
+import { levenshteinSimilarity } from '../utils/levenshtein.js'
+import { isClickWithinBounds } from '../engine/window.js'
 
 export interface PerceptionResult {
   passed: boolean
@@ -45,20 +47,6 @@ export function findElementByLabel(
   }
 
   return { passed: false, element: null, confidence: 0, warnings: [`未找到元素 "${label}"`] }
-}
-
-export function isClickWithinBounds(
-  x: number,
-  y: number,
-  bounds: Bounds,
-  margin = 0,
-): boolean {
-  return (
-    x >= bounds.x - margin &&
-    x <= bounds.x + bounds.width + margin &&
-    y >= bounds.y - margin &&
-    y <= bounds.y + bounds.height + margin
-  )
 }
 
 export function canInteract(element: ScreenElement): string[] {
@@ -115,7 +103,6 @@ function overlapAreaRatio(a: Bounds, b: Bounds): number {
 
 export function estimateElementConfidence(
   element: ScreenElement,
-  sourceElements: ScreenElement[],
 ): number {
   let score = element.confidence ?? 0.5
   if (element.source === 'uia') score = Math.max(score, 0.85)
@@ -128,24 +115,5 @@ export function estimateElementConfidence(
 function similarity(a: string, b: string): number {
   if (a === b) return 1
   if (a.includes(b) || b.includes(a)) return 0.85
-
-  const maxLen = Math.max(a.length, b.length)
-  if (maxLen === 0) return 1
-
-  const dp: number[][] = Array.from({ length: a.length + 1 }, () =>
-    Array(b.length + 1).fill(0)
-  )
-  for (let i = 0; i <= a.length; i++) dp[i][0] = i
-  for (let j = 0; j <= b.length; j++) dp[0][j] = j
-  for (let i = 1; i <= a.length; i++) {
-    for (let j = 1; j <= b.length; j++) {
-      const cost = a[i - 1] === b[j - 1] ? 0 : 1
-      dp[i][j] = Math.min(
-        dp[i - 1][j] + 1,
-        dp[i][j - 1] + 1,
-        dp[i - 1][j - 1] + cost,
-      )
-    }
-  }
-  return 1 - dp[a.length][b.length] / maxLen
+  return levenshteinSimilarity(a, b)
 }
