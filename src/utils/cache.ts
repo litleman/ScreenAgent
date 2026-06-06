@@ -8,13 +8,11 @@ interface CacheEntry<T> {
 
 const store = new Map<string, CacheEntry<unknown>>()
 
-const DEFAULT_TTL = 2000
-
-export function getCache<T>(key: string, ttl = DEFAULT_TTL): T | null {
+export function getCache<T>(key: string, ttl?: number): T | null {
   if (!config.cacheEnabled) return null
   const entry = store.get(key) as CacheEntry<T> | undefined
   if (!entry) return null
-  if (Date.now() - entry.timestamp > ttl) {
+  if (Date.now() - entry.timestamp > (ttl ?? config.cacheTtl)) {
     store.delete(key)
     return null
   }

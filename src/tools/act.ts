@@ -8,9 +8,11 @@ import { findElementByLabel, canInteract, findWindowByElement } from '../guard/p
 import { validateClick, verifyWindowStability } from '../guard/precision.js'
 import { verifyClickOutcome, analyzeInteractionRisk } from '../guard/verify.js'
 import { clickSmoother } from '../guard/smoother.js'
+import { invokeElement } from '../engine/invoke.js'
+import { isInvokeRecommended, determineMenuStrategy, logMenuStrategy } from '../utils/menu-strategy.js'
 import { success, error } from '../utils/response.js'
 import { logger } from '../utils/logger.js'
-import type { ToolHandler, ScreenElement, WindowInfo } from '../utils/types.js'
+import type { ToolHandler, ScreenElement, WindowInfo, DialogInfo } from '../utils/types.js'
 
 export const actSchema = {
   action: z.enum(['click', 'doubleClick', 'rightClick', 'type', 'keyPress', 'hover', 'scroll'])
@@ -30,6 +32,8 @@ export const actSchema = {
   movementStyle: z.enum(['bezier', 'direct', 'human']).default('bezier').describe('鼠标移动风格：bezier贝塞尔曲线、direct直线、human类人'),
   moveSpeed: z.enum(['slow', 'medium', 'fast', 'instant']).default('medium').describe('鼠标移动速度'),
   verifyClick: z.boolean().default(true).describe('点击后截图验证是否生效'),
+  autoMenuStrategy: z.boolean().default(true).describe('菜单项自动切换 InvokePattern'),
+  autoDismiss: z.boolean().default(true).describe('操作前自动检测并关闭阻挡弹窗'),
 }
 
 export const actHandler: ToolHandler = async (args) => {
@@ -49,6 +53,8 @@ export const actHandler: ToolHandler = async (args) => {
   const movementStyle = args.movementStyle as string
   const moveSpeed = args.moveSpeed as string
   const verifyClick = args.verifyClick as boolean
+  const autoMenuStrategy = args.autoMenuStrategy as boolean
+  const autoDismiss = args.autoDismiss as boolean
 
   const startTime = performance.now()
   let targetElement: ScreenElement | null = null
@@ -90,6 +96,37 @@ export const actHandler: ToolHandler = async (args) => {
     }
     if (risk.risk === 'medium') {
       logger.warn(`中等风险操作: ${risk.reason}`)
+    }
+
+    if (autoMenuStrategy && isInvokeRecommended(targetElement)) {
+      const strategy = determineMenuStrategy(targetElement)
+      logMenuStrategy(targetElement, strategy)
+      const invokeResult = invokeElement(targetElement.label)
+
+      if (invokeResult.success) {
+        const duration = performance.now() - startTime
+        return success({
+          success: true,
+          action,
+          target: label,
+          method: invokeResult.method ?? 'InvokePattern',
+          duration: `${duration.toFixed(0)}ms`,
+          elementBounds: targetElement.bounds,
+          source: targetElement.source,
+          confidence: targetElement.confidence,
+        })
+      }
+      logger.warn(`InvokePattern 失败 (${invokeResult.error})，降级到鼠标点击`)
+    }
+  }
+
+  if (autoDismiss) {
+    const targetWindowId = targetElement?.windowId ?? parentWindow?.id ?? screenContext.state?.focusedWindowId
+    if (targetWindowId) {
+      const dismissed = await dismissBlockingDialogs(targetWindowId)
+      if (dismissed > 0) {
+        logger.info(`已自动关闭 ${dismissed} 个阻挡弹窗`)
+      }
     }
   }
 
@@ -267,7 +304,7 @@ async function locateElement(
     return { element: null, window: null, error: `视觉扫描失败: ${vision.error}` }
   }
 
-  const uia = scanUiaTree()
+  const uia = scanUiaTree(true)
   const uiaElements = uia.success ? uia.elements : []
   const allWindows = vision.windows ?? uia.windows ?? []
   const { elements: allElements } = fuseElements(uiaElements, vision.elements, allWindows)
@@ -292,9 +329,57 @@ async function locateElement(
     return { element: null, window: null, error: `未找到元素 "${label}"` }
   }
 
-  const windowMatch = findWindowByElement(found.element, allWindows)
-  const fullWindow = windowMatch.window
-    ? allWindows.find(w => w.id === windowMatch.window!.id) ?? null
-    : null
+  const matched = findWindowByElement(found.element, allWindows).window
+  const fullWindow = matched ? allWindows.find(w => w.id === matched.id) ?? null : null
   return { element: found.element, window: fullWindow }
+}
+
+const DISMISS_BUTTON_PRIORITY = [
+  '关闭', 'Close', '×',
+  '确定', 'OK', 'Confirm', '确认',
+  '取消', 'Cancel',
+  '否', 'No', 'Don\'t Save', '不保存',
+  '应用', 'Apply',
+]
+
+async function dismissBlockingDialogs(windowId: string): Promise<number> {
+  const uia = scanUiaTree(true)
+  if (!uia.success || !uia.windows || !uia.dialogWindows) return 0
+
+  const dialogs = (uia.dialogWindows as DialogInfo[]).filter(d => {
+    if (d.blocksWindowId === windowId) return true
+    const dialogWin = uia.windows!.find(w => w.id === d.id)
+    const targetWin = uia.windows!.find(w => w.id === windowId)
+    if (!dialogWin || !targetWin) return false
+    const a = dialogWin.bounds, b = targetWin.bounds
+    return a.x < b.x + b.width && a.x + a.width > b.x &&
+           a.y < b.y + b.height && a.y + a.height > b.y
+  })
+
+  if (dialogs.length === 0) return 0
+
+  const allElements = uia.elements ?? []
+  let dismissed = 0
+
+  for (const dialog of dialogs) {
+    const els = allElements.filter(e => e.windowId === dialog.id)
+    const buttons = els
+      .filter(e => e.type === 'button' && e.isEnabled && e.isVisible)
+      .sort((a, b) => {
+        const ai = DISMISS_BUTTON_PRIORITY.findIndex(l => a.label.includes(l))
+        const bi = DISMISS_BUTTON_PRIORITY.findIndex(l => b.label.includes(l))
+        return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi)
+      })
+
+    if (buttons.length > 0) {
+      const btn = buttons[0]
+      const r = executeInput({ action: 'click', x: btn.center.x, y: btn.center.y, delay: 200 })
+      if (r.success) { dismissed++; continue }
+    }
+
+    const r = executeInput({ action: 'keyPress', key: 'Escape', delay: 200 })
+    if (r.success) dismissed++
+  }
+
+  return dismissed
 }

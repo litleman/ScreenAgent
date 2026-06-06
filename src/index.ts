@@ -15,6 +15,7 @@ import {
   waitForElementHandler,
   waitForStableHandler,
 } from './tools/wait.js'
+import { dismissSchema, dismissHandler } from './tools/dismiss.js'
 
 const server = new McpServer({
   name: 'screen-agent',
@@ -55,6 +56,13 @@ server.tool(
   'Wait until the screen stops changing (loading/spinner finished)',
   waitForStableSchema,
   waitForStableHandler,
+)
+
+server.tool(
+  'screen_dismiss_dialogs',
+  'Dismiss modal dialogs by clicking close/OK/Cancel buttons or pressing Escape',
+  dismissSchema,
+  dismissHandler,
 )
 
 async function main() {

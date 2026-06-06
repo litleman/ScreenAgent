@@ -71,7 +71,7 @@ def get_ocr():
         try:
             import easyocr
             print("[INFO] easyocr 正在下载/加载识别模型 (~100MB)，首次运行可能需要几分钟...", file=sys.stderr)
-            _ocr_reader = easyocr.Reader(['ch_sim', 'en'], gpu=False)
+            _ocr_reader = easyocr.Reader(['ch_sim', 'en'], gpu=True)
             print("[INFO] easyocr 模型就绪", file=sys.stderr)
         except ImportError:
             print("[WARN] easyocr not installed. Run: pip install easyocr", file=sys.stderr)
@@ -252,12 +252,74 @@ def guess_element_type(label, bounds):
         return 'text'
     return 'text'
 
+# ── Smart cropping (P1-A5b) ──────────────────────────────────────────────
+
+def smart_crop_regions(img, max_regions=8):
+    """Detect content-rich regions via edge density projection, return list of (x,y,w,h) crops."""
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    edges = cv2.Canny(gray, 50, 150)
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
+    dilated = cv2.dilate(edges, kernel, iterations=2)
+
+    h_proj = np.sum(dilated, axis=1)
+    v_proj = np.sum(dilated, axis=0)
+
+    h, w = img.shape[:2]
+    h_thresh = h_proj.max() * 0.02 if h_proj.max() > 0 else 1
+    v_thresh = v_proj.max() * 0.02 if v_proj.max() > 0 else 1
+
+    h_gaps = h_proj > h_thresh
+    v_gaps = v_proj > v_thresh
+
+    h_ranges = _find_ranges(h_gaps)
+    v_ranges = _find_ranges(v_gaps)
+
+    regions = []
+    for hy1, hy2 in h_ranges:
+        for vx1, vx2 in v_ranges:
+            region_h = hy2 - hy1
+            region_w = vx2 - vx1
+            if region_w < 30 or region_h < 20:
+                continue
+            if region_w > w * 0.9 and region_h > h * 0.9:
+                continue
+            crop = img[hy1:hy2, vx1:vx2]
+            if crop.size == 0:
+                continue
+            regions.append((vx1, hy1, vx2 - vx1, hy2 - hy1))
+
+    regions.sort(key=lambda r: -r[2] * r[3])
+    return regions[:max_regions]
+
+
+def _find_ranges(binary_mask):
+    ranges = []
+    in_range = False
+    start = 0
+    for i, val in enumerate(binary_mask):
+        if val and not in_range:
+            start = i
+            in_range = True
+        elif not val and in_range:
+            ranges.append((start, i))
+            in_range = False
+    if in_range:
+        ranges.append((start, len(binary_mask)))
+    return ranges
+
+
 # ── OCR pipeline ───────────────────────────────────────────────────────
 
-def ocr_screen(img):
+def ocr_screen(img, smart_crop=True):
     reader = get_ocr()
     if reader is None:
         return []
+
+    if smart_crop:
+        regions = smart_crop_regions(img)
+        if regions:
+            return _ocr_cropped_regions(reader, img, regions)
+
     results = reader.readtext(img)
     raw_elements = []
     for bbox, text, conf in results:
@@ -293,6 +355,45 @@ def ocr_screen(img):
         calibrated.id = f'ocr_{calibrated.bounds["x"]}_{calibrated.bounds["y"]}_{calibrated.bounds["width"]}_{calibrated.bounds["height"]}'
         edge_refined[i] = calibrated
 
+    return edge_refined
+
+
+def _ocr_cropped_regions(reader, full_img, regions):
+    all_elements = []
+    for rx, ry, rw, rh in regions:
+        crop = full_img[ry:ry + rh, rx:rx + rw]
+        if crop.size == 0:
+            continue
+        results = reader.readtext(crop)
+        for bbox, text, conf in results:
+            if not text.strip() or conf < 0.2:
+                continue
+            x_coords = [int(p[0]) + rx for p in bbox]
+            y_coords = [int(p[1]) + ry for p in bbox]
+            bounds = Bounds(
+                x=min(x_coords), y=min(y_coords),
+                width=max(x_coords) - min(x_coords),
+                height=max(y_coords) - min(y_coords),
+            )
+            if bounds.width < 3 or bounds.height < 3:
+                continue
+            el = ScreenElement(
+                id='', label=text.strip(), type=guess_element_type(text.strip(), bounds),
+                bounds=asdict(bounds),
+                center={'x': bounds.x + bounds.width // 2, 'y': bounds.y + bounds.height // 2},
+                confidence=conf, source='ocr',
+            )
+            all_elements.append(el)
+
+    screen_h, screen_w = full_img.shape[:2]
+    deduped = merge_overlapping_boxes(all_elements)
+    merged = merge_adjacent_text(deduped)
+    filtered = filter_noise(merged, screen_w, screen_h)
+    edge_refined = refine_bounds_with_edges(full_img, filtered)
+    for i, el in enumerate(edge_refined):
+        calibrated = calibrate_confidence(el)
+        calibrated.id = f'ocr_{calibrated.bounds["x"]}_{calibrated.bounds["y"]}_{calibrated.bounds["width"]}_{calibrated.bounds["height"]}'
+        edge_refined[i] = calibrated
     return edge_refined
 
 # ── Edge detection & bounds refinement ────────────────────────────────

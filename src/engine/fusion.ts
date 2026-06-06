@@ -1,8 +1,14 @@
 import type { ScreenElement, WindowInfo } from '../utils/types.js'
 import { logger } from '../utils/logger.js'
 
-const FUSION_IOU_THRESHOLD = 0.5
+const FUSION_THRESHOLD = 0.6
+const TEXT_MATCH_IOU_FLOOR = 0.05
 const OCR_LABEL_PREFERENCE_MIN_CONF = 0.6
+
+const W_IOU = 0.4
+const W_TEXT = 0.3
+const W_TYPE = 0.2
+const W_SIZE = 0.1
 
 export interface FusionResult {
   elements: ScreenElement[]
@@ -41,17 +47,21 @@ export function fuseElements(
     ocr.confidence = ocr.confidence ?? 0.5
     const enriched = enrichWithWindow(ocr, windows)
 
-    let bestMatch: { id: string; iou: number } | null = null
+    let bestMatch: { id: string; score: number } | null = null
 
     for (const uia of uiaElements) {
-      const iou = computeIoU(
-        enriched.bounds.x, enriched.bounds.y,
-        enriched.bounds.width, enriched.bounds.height,
-        uia.bounds.x, uia.bounds.y,
-        uia.bounds.width, uia.bounds.height,
-      )
-      if (iou > FUSION_IOU_THRESHOLD && (!bestMatch || iou > bestMatch.iou)) {
-        bestMatch = { id: uia.id, iou }
+      const score = multiFactorSimilarity(enriched, uia)
+      if (score >= FUSION_THRESHOLD && (!bestMatch || score > bestMatch.score)) {
+        bestMatch = { id: uia.id, score }
+      }
+    }
+
+    if (!bestMatch) {
+      for (const uia of uiaElements) {
+        const textScore = matchByText(enriched, uia)
+        if (textScore > 0 && (!bestMatch || textScore > bestMatch.score)) {
+          bestMatch = { id: uia.id, score: textScore }
+        }
       }
     }
 
@@ -60,7 +70,7 @@ export function fuseElements(
       fusionCount++
       const existing = fused.get(bestMatch.id)
       if (existing) {
-        const merged = mergeElements(existing, enriched, bestMatch.iou)
+        const merged = mergeElements(existing, enriched, bestMatch.score)
         if (merged.type !== existing.type) {
           typeUpgrades.push(`${existing.label}: ${existing.type} → ${merged.type}`)
         }
@@ -91,10 +101,64 @@ export function fuseElements(
   }
 }
 
+function multiFactorSimilarity(ocr: ScreenElement, uia: ScreenElement): number {
+  const iouScore = computeIoU(
+    ocr.bounds.x, ocr.bounds.y, ocr.bounds.width, ocr.bounds.height,
+    uia.bounds.x, uia.bounds.y, uia.bounds.width, uia.bounds.height,
+  )
+  if (iouScore <= 0) return 0
+
+  const textScore = levenshteinSimilarity(ocr.label, uia.label)
+  const typeScore = ocr.type === uia.type ? 1 : (
+    (ocr.type === 'text' || uia.type === 'text') ? 0.3 : 0
+  )
+  const sizeScore = computeSizeRatio(
+    ocr.bounds.width, ocr.bounds.height,
+    uia.bounds.width, uia.bounds.height,
+  )
+
+  return W_IOU * iouScore + W_TEXT * textScore + W_TYPE * typeScore + W_SIZE * sizeScore
+}
+
+function computeSizeRatio(w1: number, h1: number, w2: number, h2: number): number {
+  if (w1 <= 0 || h1 <= 0 || w2 <= 0 || h2 <= 0) return 0
+  const a1 = w1 * h1
+  const a2 = w2 * h2
+  const ratio = a1 < a2 ? a1 / a2 : a2 / a1
+  return ratio
+}
+
+function levenshteinSimilarity(a: string, b: string): number {
+  const al = a.toLowerCase().trim()
+  const bl = b.toLowerCase().trim()
+  if (al === bl) return 1
+  if (!al || !bl) return 0
+  if (al.includes(bl) || bl.includes(al)) return 0.8 + Math.min(al.length, bl.length) / Math.max(al.length, bl.length) * 0.2
+
+  const n = al.length
+  const m = bl.length
+  const maxLen = Math.max(n, m)
+  if (maxLen === 0) return 1
+
+  const dp: number[][] = Array.from({ length: n + 1 }, () => Array(m + 1).fill(0))
+  for (let i = 0; i <= n; i++) dp[i][0] = i
+  for (let j = 0; j <= m; j++) dp[0][j] = j
+  for (let i = 1; i <= n; i++) {
+    for (let j = 1; j <= m; j++) {
+      dp[i][j] = Math.min(
+        dp[i - 1][j] + 1,
+        dp[i][j - 1] + 1,
+        dp[i - 1][j - 1] + (al[i - 1] === bl[j - 1] ? 0 : 1),
+      )
+    }
+  }
+  return 1 - dp[n][m] / maxLen
+}
+
 function mergeElements(
   uia: ScreenElement,
   ocr: ScreenElement,
-  iou: number,
+  fusionScore: number,
 ): ScreenElement {
   const useOcrLabel = ocr.label.length > uia.label.length && (ocr.confidence ?? 0) >= OCR_LABEL_PREFERENCE_MIN_CONF
   const label = useOcrLabel ? ocr.label : uia.label
@@ -112,7 +176,7 @@ function mergeElements(
     isVisible: uia.isVisible || ocr.isVisible,
   }
 
-  if (iou > 0.75) {
+  if (fusionScore > 0.75) {
     const avgX = (uia.bounds.x + ocr.bounds.x) / 2
     const avgY = (uia.bounds.y + ocr.bounds.y) / 2
     const avgW = (uia.bounds.width + ocr.bounds.width) / 2
@@ -121,7 +185,7 @@ function mergeElements(
     enriched.center = { x: Math.round(avgX + avgW / 2), y: Math.round(avgY + avgH / 2) }
   }
 
-  if (uia.type === 'text' && ocr.type !== 'text') {
+  if ((uia.type === 'text' || uia.type === 'text_block') && ocr.type !== 'text' && ocr.type !== 'text_block') {
     enriched.type = ocr.type
   }
 
@@ -176,6 +240,26 @@ function findClosestWindow(
   }
 
   return best && best.overlap > 0 ? best.win : null
+}
+
+function matchByText(ocr: ScreenElement, uia: ScreenElement): number {
+  const iou = computeIoU(
+    ocr.bounds.x, ocr.bounds.y, ocr.bounds.width, ocr.bounds.height,
+    uia.bounds.x, uia.bounds.y, uia.bounds.width, uia.bounds.height,
+  )
+  if (iou < TEXT_MATCH_IOU_FLOOR) return 0
+
+  const lev = levenshteinSimilarity(ocr.label, uia.label)
+  if (lev >= 0.35) return 0.5 + lev * 0.3
+
+  if (uia.type === 'text' || uia.type === 'text_block') {
+    if (ocr.type !== 'text' && ocr.type !== 'text_block') {
+      const shortLev = levenshteinSimilarity(ocr.label.slice(0, 20), uia.label.slice(0, 20))
+      if (shortLev >= 0.2) return 0.4 + shortLev * 0.2
+    }
+  }
+
+  return 0
 }
 
 export function dedupeByBounds(elements: ScreenElement[]): ScreenElement[] {

@@ -1,6 +1,6 @@
 export type ElementType =
   | 'button' | 'input' | 'link' | 'checkbox' | 'radio' | 'combo'
-  | 'slider' | 'text' | 'image' | 'list' | 'table' | 'tree'
+  | 'slider' | 'text' | 'text_block' | 'image' | 'list' | 'table' | 'tree'
   | 'dialog' | 'window' | 'pane' | 'menu' | 'title' | 'scrollbar'
   | 'unknown'
 
@@ -19,7 +19,27 @@ export interface WindowInfo {
   isMinimized: boolean
   isMaximized: boolean
   isFocused: boolean
+  isDialog?: boolean
+  blockedBy?: string | null
   zOrder: number
+}
+
+export interface DialogInfo {
+  id: string
+  title: string
+  blocksWindowId?: string | null
+}
+
+export interface MenuItemInfo {
+  id: string
+  label: string
+  controlType: string
+  bounds: Bounds
+  center: { x: number; y: number }
+  isEnabled: boolean
+  isVisible: boolean
+  hasSubMenu: boolean
+  windowId?: string
 }
 
 export interface ScreenElement {
@@ -66,6 +86,8 @@ export interface UiaResult {
   success: boolean
   elements: ScreenElement[]
   windows?: WindowInfo[]
+  dialogWindows?: DialogInfo[]
+  menuItems?: MenuItemInfo[]
   focusedApp: string | null
   focusedWindow: string | null
   windowBounds: Bounds | null

@@ -1,12 +1,15 @@
 import type { ScreenState, ScreenElement, WindowInfo, Bounds } from '../utils/types.js'
 import { logger } from '../utils/logger.js'
-import { WindowTracker } from './window.js'
+import { WindowTracker, type WindowChange } from './window.js'
 
 export class ScreenContext {
   private currentState: ScreenState | null = null
   private previousState: ScreenState | null = null
   private windowTracker = new WindowTracker()
   private windowResizedSinceLastScan = false
+  private focusChangedSinceLastScan = false
+  private menuTransitionSinceLastScan = false
+  private previousFocusedType: string | null = null
 
   get state(): ScreenState | null {
     return this.currentState
@@ -19,6 +22,18 @@ export class ScreenContext {
   hadWindowResizeSinceLastScan(): boolean {
     const val = this.windowResizedSinceLastScan
     this.windowResizedSinceLastScan = false
+    return val
+  }
+
+  hadFocusChangeSinceLastScan(): boolean {
+    const val = this.focusChangedSinceLastScan
+    this.focusChangedSinceLastScan = false
+    return val
+  }
+
+  hadMenuTransitionSinceLastScan(): boolean {
+    const val = this.menuTransitionSinceLastScan
+    this.menuTransitionSinceLastScan = false
     return val
   }
 
@@ -49,6 +64,11 @@ export class ScreenContext {
       this.windowResizedSinceLastScan = true
     }
 
+    const hasFocusChange = changes.some(c => c.type === 'focus_changed')
+    if (hasFocusChange) {
+      this.focusChangedSinceLastScan = true
+    }
+
     const newState: ScreenState = {
       timestamp: new Date().toISOString(),
       focusedApp,
@@ -61,7 +81,20 @@ export class ScreenContext {
     }
 
     this.currentState = newState
+
+    this.detectMenuTransition(windowAssigned, focusedWindowId)
+
     return newState
+  }
+
+  private detectMenuTransition(elements: ScreenElement[], focusedWindowId: string | null): void {
+    if (!focusedWindowId) return
+    const focusedEls = elements.filter(e => e.windowId === focusedWindowId && e.isFocused)
+    const currentType = focusedEls.length > 0 ? focusedEls[0].type : null
+    if (currentType === 'menu' && this.previousFocusedType !== null && this.previousFocusedType !== 'menu') {
+      this.menuTransitionSinceLastScan = true
+    }
+    this.previousFocusedType = currentType
   }
 
   findElement(
@@ -158,6 +191,14 @@ export class ScreenContext {
 
   getFocusedWindow(): WindowInfo | null {
     return this.currentState?.windows.find(w => w.isFocused) ?? null
+  }
+
+  getActiveWindowElements(): ScreenElement[] {
+    const state = this.currentState
+    if (!state) return []
+    const focused = state.windows.find(w => w.isFocused)
+    if (!focused) return state.elements
+    return state.elements.filter(e => e.windowId === focused.id)
   }
 
   getWindowForElement(elementId: string): { element: ScreenElement | null; window: WindowInfo | null } {

@@ -10,6 +10,7 @@ export interface ScreenAgentConfig {
   inputScriptPath: string
   screenshotDir: string
   cacheEnabled: boolean
+  cacheTtl: number
   logLevel: 'debug' | 'info' | 'warn' | 'error'
   defaultTimeout: number
   pollInterval: number
@@ -41,8 +42,9 @@ function loadConfig(): ScreenAgentConfig {
       process.env.SCREEN_AGENT_SCREENSHOT_DIR ||
       resolvePath('../../screenshots'),
     cacheEnabled: process.env.SCREEN_AGENT_CACHE !== 'false',
+    cacheTtl: numEnv('SCREEN_AGENT_CACHE_TTL', 500),
     logLevel: (process.env.SCREEN_AGENT_LOG_LEVEL as ScreenAgentConfig['logLevel']) || 'info',
-    defaultTimeout: numEnv('SCREEN_AGENT_TIMEOUT', 15000),
+    defaultTimeout: numEnv('SCREEN_AGENT_TIMEOUT', 60000),
     pollInterval: numEnv('SCREEN_AGENT_POLL_INTERVAL', 500),
   }
 }
